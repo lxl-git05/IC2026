@@ -3,10 +3,10 @@
 // 写回rd对于的寄存器,实现寄存器操作(本操作使用到了rd,所以需要使能wr_en)
 module Rigister(
         input clk ,     
-        input wr_en,        // 使能写入rd  
+        input wr_en,            // 使能写入rd  
   
-        input  [4:0] rs1,   // rs1的地址
-        input  [4:0] rs2,   // rs2的地址
+        input  [4:0] rs1,       // rs1的地址
+        input  [4:0] rs2,       // rs2的地址
         input  [4:0] rd,
 
         input  [31:0] wr_data,  // 写入rd的值

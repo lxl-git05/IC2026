@@ -17,6 +17,39 @@ https://blog.csdn.net/sinat_39901027/article/details/119148381
 
 ## 3-2 
 
+# 4. 单周期CPU实现
+
+## 4-1 ROM: $readmemb和$readmemh
+
++ 参考资料： [深入解析Verilog中的$readmemb和$readmemh：从基础到实战-CSDN博客](https://blog.csdn.net/weixin_29159711/article/details/158673746?ops_request_misc=&request_id=&biz_id=102&utm_term=readmemb&utm_medium=distribute.pc_search_result.none-task-blog-2~all~sobaiduweb~default-0-158673746.142^v102^pc_search_result_base5&spm=1018.2226.3001.4187)
+
+
+
+## 4-2 寄存器Rigister
+
+RISC-V 规范要求：
+
+- 寄存器读是**异步**的（组合逻辑输出）
+  - rs1和rs2都是直接访问寄存器得到值并且直接输出
+- 寄存器写是**同步**的（时钟边沿触发）
+  - rd的写入需要等待时钟上升沿才行
+- 在同一个时钟周期内：先读旧值，后写新值
+  - 这种方法使得ALU始终得到新的计算值, 而输出的值在上升沿输入rd,保证rd不会一直变来变去
+
+
+
+## 4-3 单周期add指令的总结
+
+![image-20260429165723888](RISC-V的CPU设计.assets/image-20260429165723888.png)
+
++ 第1个上升沿PC写入指令**并且输出指令(异步)**
++ (异步)Decode进行解码, Control进行写入
++ (异步)Rigister输出数据给ALU
++ (异步)ALU进行计算
+  + ALU结果在本周期内已经算好
+  + 但 register 写入要等 clk 上升沿
++ (同步)ALU写入Rd寄存器(下1个上升沿)
+
 
 
 

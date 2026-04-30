@@ -101,3 +101,122 @@ RISC-V 规范要求：
 + 总图
 
 ![image-20260430151643348](RISC-V的CPU设计.assets/image-20260430151643348.png)
+
+### R型通路
+
+![image-20260430154847820](RISC-V的CPU设计.assets/image-20260430154847820.png)
+
+![image-20260430155027149](RISC-V的CPU设计.assets/image-20260430155027149.png)
+
+![image-20260430160228944](RISC-V的CPU设计.assets/image-20260430160228944.png)
+
+### I型通路
+
++ 计算型
+  + addi
+  + ori
+
+![image-20260430161335334](RISC-V的CPU设计.assets/image-20260430161335334.png)
+
+
+
+![image-20260430161613292](RISC-V的CPU设计.assets/image-20260430161613292.png)
+
++ 装载型
+  + lw
+
+![image-20260430162229527](RISC-V的CPU设计.assets/image-20260430162229527.png)
+
+![image-20260430162452163](RISC-V的CPU设计.assets/image-20260430162452163.png)
+
++ 跳转型
+  + jalr
+
+![image-20260430163435739](RISC-V的CPU设计.assets/image-20260430163435739.png)
+
+![image-20260430163607571](RISC-V的CPU设计.assets/image-20260430163607571.png)
+
+### S型通路
+
++ 仅仅实现sw即可
+
+![image-20260430163722108](RISC-V的CPU设计.assets/image-20260430163722108.png)
+
+
+
+![image-20260430164349684](RISC-V的CPU设计.assets/image-20260430164349684.png)
+
+### B型通路
+
++ 两条指令
+  + beq
+  + bne
+
+![image-20260430164458959](RISC-V的CPU设计.assets/image-20260430164458959.png)
+
+![image-20260430165414765](RISC-V的CPU设计.assets/image-20260430165414765.png)
+
+### J型通路
+
+![image-20260430165600116](RISC-V的CPU设计.assets/image-20260430165600116.png)
+
+
+
+![image-20260430170011711](RISC-V的CPU设计.assets/image-20260430170011711.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

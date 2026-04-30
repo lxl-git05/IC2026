@@ -5,7 +5,8 @@ module Decode(
         output [ 4: 0]   rs1 ,
         output [ 2: 0] func3 ,
         output [ 4: 0]    rd ,
-        output [ 6: 0]    op 
+        output [ 6: 0]    op ,
+        output [11: 0]   imm 
     );
     // 书写逻辑
     assign func7 = instr[31:25];
@@ -14,5 +15,6 @@ module Decode(
     assign func3 = instr[14:12];
     assign rd    = instr[11: 7];
     assign op    = instr[ 6: 0];
+    assign imm   ={instr[ 6: 0]} == 7'b0010011 ? instr[31:20] : 12'b0 ; // I型指令判别
 
 endmodule

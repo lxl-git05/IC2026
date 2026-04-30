@@ -52,5 +52,52 @@ RISC-V 规范要求：
 
 
 
+# 5. 南京大学资料总结
+
+## 5-1 RV32I的指令编码类型
+
+- **R-Type** ：为寄存器操作数指令，含2个源寄存器rs1,rs2和一个目的寄存器rd。
+- **I-Type** ：为立即数操作指令，含一个源寄存器和一个目的寄存器和一个12bit立即数操作数
+- **S-Type** ：为存储器写指令，含两个源寄存器和一个12bit立即数。
+- B-Type：为跳转指令，实际是S-Type的变种。与S-Type主要的区别是立即数编码。S-Type中的imm[11:5]变为{immm[12], imm[10:5]}，imm[4:0]变为{imm[4:1], imm[11]}。
+- **U-Type** ：为长立即数指令，含一个目的寄存器和20bit立即数操作数。
+- J-Type：为长跳转指令，实际是U-Type的变种。与U-Type主要的区别是立即数编码。U-Type中的imm[31:12]变为{imm[20], imm[10:1], imm[11], imm[19:12]}。
+
+![image-20260430151142426](RISC-V的CPU设计.assets/image-20260430151142426.png)
 
 
+
+## 5-2 通用寄存器
+
++ 32个: 其中x0恒为0, 在写Register的时候需要特别注意
+
+| Register | Name   | Use                    | Saver  |
+| -------- | ------ | ---------------------- | ------ |
+| x0       | zero   | Constant 0             | –      |
+| x1       | ra     | Return Address         | Caller |
+| x2       | sp     | Stack Pointer          | Callee |
+| x3       | gp     | Global Pointer         | –      |
+| x4       | tp     | Thread Pointer         | –      |
+| x5~x7    | t0~t2  | Temp                   | Caller |
+| x8       | s0/fp  | Saved/Frame pointer    | Callee |
+| x9       | s1     | Saved                  | Callee |
+| x10~x11  | a0~a1  | Arguments/Return Value | Caller |
+| x12~x17  | a2~a7  | Arguments              | Caller |
+| x18~x27  | s2~s11 | Saved                  | Callee |
+| x28~x31  | t3~t6  | Temp                   | Caller |
+
+
+
+## 5-3 指令分类
+
++ 整数运算指令
++ 控制转移指令
++ 存储器访问指令
+
+
+
+## 5-4 数据通路的实现
+
++ 总图
+
+![image-20260430151643348](RISC-V的CPU设计.assets/image-20260430151643348.png)

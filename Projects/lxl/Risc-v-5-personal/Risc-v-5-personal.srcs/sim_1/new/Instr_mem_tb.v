@@ -14,7 +14,7 @@ module Instr_mem_tb;
     initial begin
         // 初始化
         addr = 32'd0;
-
+        
         #10;
         $display("addr=%d instr=%h", addr, instr);  // 查看参数
 
@@ -25,6 +25,34 @@ module Instr_mem_tb;
 
         // 下一条指令
         addr = 32'd8;
+        #10;
+        $display("addr=%d instr=%h", addr, instr);
+
+        addr = 32'd12;
+        #10;
+        $display("addr=%d instr=%h", addr, instr);
+
+        addr = 32'd16;
+        #10;
+        $display("addr=%d instr=%h", addr, instr);
+
+        addr = 32'd20;
+        #10;
+        $display("addr=%d instr=%h", addr, instr);
+
+        addr = 32'd24;
+        #10;
+        $display("addr=%d instr=%h", addr, instr);
+
+        addr = 32'd28;
+        #10;
+        $display("addr=%d instr=%h", addr, instr);
+
+        addr = 32'd32;
+        #10;
+        $display("addr=%d instr=%h", addr, instr);
+
+        addr = 32'd36;
         #10;
         $display("addr=%d instr=%h", addr, instr);
 

@@ -3,10 +3,10 @@
 module NPC(NPCOp,Offset12,Offset20,PC,rs,PCA4, NPC);
 
     input [1:0] NPCOp;
-    input [12:1] Offset12;
-    input [20:1] Offset20;
+    input [12:1] Offset12;  // branch
+    input [20:1] Offset20;  // jal
     input [31:0] PC;
-    input [31:0] rs;
+    input [31:0] rs;        // jalr使用: label = rs1 + imm
     output reg [31:0] PCA4;
     output reg [31:0] NPC;
 
@@ -18,12 +18,12 @@ module NPC(NPCOp,Offset12,Offset20,PC,rs,PCA4, NPC);
 
     always@(*) begin
         case(NPCOp)
-            `NPC_PC       : NPC = PC + 4;
-            `NPC_Offset12 : NPC = $signed({1'b0,PC}) + $signed(Offset13) ;
-            `NPC_rs       : NPC = rs;
-            `NPC_Offset20 : NPC = $signed({1'b0,PC}) + $signed(Offset21) ;
+            `NPC_PC       : NPC = PC + 4;                                       // 正常执行
+            `NPC_Offset12 : NPC = $signed({1'b0,PC}) + $signed(Offset13) ;      // branch
+            `NPC_rs       : NPC = rs;                                           // jalr
+            `NPC_Offset20 : NPC = $signed({1'b0,PC}) + $signed(Offset21) ;      // jal
         endcase
-        PCA4=PC+4;
+        PCA4 = PC+4;  // 给jal和jalr使用的rd = PC + 4 存储
     end
 
 endmodule

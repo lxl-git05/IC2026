@@ -19,9 +19,9 @@ module NPC(NPCOp,Offset12,Offset20,PC,rs,PCA4, NPC);
     always@(*) begin
         case(NPCOp)
             `NPC_PC       : NPC = PC + 4;                                       // 正常执行
-            `NPC_Offset12 : NPC = $signed({1'b0,PC}) + $signed(Offset13) ;      // branch
-            `NPC_rs       : NPC = rs;                                           // jalr
-            `NPC_Offset20 : NPC = $signed({1'b0,PC}) + $signed(Offset21) ;      // jal
+            `NPC_Offset12 : NPC = PC + Offset13 ;   // branch
+            `NPC_rs       : NPC = (rs + {{20{Offset12[12]}}, Offset12[12:1]}) & 32'hffff_fffe; // jalr                                           // jalr
+            `NPC_Offset20 : NPC = PC + Offset21 ;   // jal
         endcase
         PCA4 = PC+4;  // 给jal和jalr使用的rd = PC + 4 存储
     end

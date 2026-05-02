@@ -604,7 +604,7 @@ module riscv(clk, rst);
 endmodule
 ```
 
-## 2-1 测试程序和HEX
+## 2-1 测试C程序,hex和tb
 
 ```c
 #include <stdio.h>
@@ -618,7 +618,7 @@ int main()
     asm volatile("ori x3 ,x0 ,0 ");
     asm volatile("add x11,x2,x1 ");
     asm volatile("sub x12,x2,x1 ");
-    asm volatile("addi x13,x2 ,1 ");
+    asm volatile("addi x13,x2 ,1 "); /
     asm volatile("or  x14,x2,x3 ");
     asm volatile("and x15,x1,x2 ");
     asm volatile("xor x19,x2,x1 ");
@@ -690,6 +690,41 @@ fe519ce3
 ```
 
 
+
+```verilog
+`timescale 1 ps / 1 ps
+
+module riscv_sim ();
+
+// Inputs
+reg clk, rst;
+
+riscv U_RISCV(
+    .clk(clk), .rst(rst)
+);
+
+initial begin
+    $readmemh ("../hex/code.hex", U_RISCV.U_IM.memory);
+    $display("Instruction memory initialized");
+    $monitor("PC = 0x%8X, IR = 0x%8X",U_RISCV.U_PC.PC, U_RISCV.out_ins );
+    clk = 1 ;
+
+    #5 ;
+    rst = 1 ;
+    #20 ;
+    rst = 0 ;
+end
+
+always
+    #(50) clk = ~clk;
+
+initial begin
+    $fsdbDumpvars(0,"riscv_sim");
+    $fsdbDumpMDA(0,"riscv_sim");
+end
+
+endmodule
+```
 
 
 

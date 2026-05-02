@@ -14,6 +14,7 @@ module riscv(clk, rst);
     wire [31:0] in_ins, out_ins, RD, DR_out;
     wire [4:0] rs1, rs2, rd;
     wire [11:0] Imm12;
+    wire [31:0] Imm32;
     wire [20:1] Offset20;
     wire [11:0] Offset;
     wire [4:0] WR;
@@ -29,9 +30,9 @@ module riscv(clk, rst);
     assign rd       = out_ins[11:7];
     // I型指令(12位),用于addi,ori,lw,jalr
     assign Imm12    = out_ins[31:20];
-    // jal
+    // jal[20:1] = {out_ins[31], out_ins[19:12], out_ins[20], out_ins[30:21]}
     assign Offset20 = {out_ins[31],out_ins[19:12],out_ins[20],out_ins[30:21]};
-    // INSTR_BTYPE_OP->branch  INSTR_SW_OP->sw 否则->I型指令
+    // INSTR_BTYPE_OP->branch[12:1]  INSTR_SW_OP->sw 否则->I型指令
     assign Offset   = (opcode == `INSTR_BTYPE_OP) ? {out_ins[31],out_ins[7],out_ins[30:25],out_ins[11:8]} :
                       (opcode == `INSTR_SW_OP)    ? {out_ins[31:25],out_ins[11:7]} : Imm12;
 
@@ -50,7 +51,7 @@ module riscv(clk, rst);
 
     // NPC
     NPC U_NPC (
-        .PC(PC), .NPCOp(NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs(RD1[31:2]), .PCA4(PCA4), .NPC(NPC)
+        .PC(PC), .NPCOp(NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs(RD1), .PCA4(PCA4), .NPC(NPC)
     );
 
     // IM
@@ -58,10 +59,11 @@ module riscv(clk, rst);
         .addr(PC[11:2]), .Ins(in_ins), .InsMemRW(InsMemRW)
     );
 
-    // IR
-    IR U_IR (
-        .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins)
-    );
+    assign out_ins = in_ins;
+    // // IR
+    // IR U_IR (
+    //     .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins)
+    // );
 
     // RF
     RF U_RF (
@@ -79,15 +81,17 @@ module riscv(clk, rst);
         .X(ALU_result_r), .Y(DR_out), .Z(PCA4), .control(WDSel), .out(WD)
     );
 
-    // Flopr for RD1
-    Flopr U_A (
-        .clk(clk), .rst(rst), .in_data(RD1), .out_data(RD1_r)
-    );
+    assign RD1_r = RD1;
+    assign RD2_r = RD2;
+    // // Flopr for RD1
+    // Flopr U_A (
+    //     .clk(clk), .rst(rst), .in_data(RD1), .out_data(RD1_r)
+    // );
 
-    // Flopr for RD2
-    Flopr U_B (
-        .clk(clk), .rst(rst), .in_data(RD2), .out_data(RD2_r)
-    );
+    // // Flopr for RD2
+    // Flopr U_B (
+    //     .clk(clk), .rst(rst), .in_data(RD2), .out_data(RD2_r)
+    // );
 
     // EXT
     EXT U_EXT (
@@ -109,21 +113,20 @@ module riscv(clk, rst);
         .A(A), .B(B), .ALUOp(ALUOp), .ALU_result(ALU_result), .zero(zero)
     );
 
-    // Flopr for ALU_result
-    Flopr U_ALUOut (
-        .clk(clk), .rst(rst), .in_data(ALU_result), .out_data(ALU_result_r)
-    );
+    assign ALU_result_r = ALU_result;
+    // // Flopr for ALU_result
+    // Flopr U_ALUOut (
+    //     .clk(clk), .rst(rst), .in_data(ALU_result), .out_data(ALU_result_r)
+    // );
 
     // DM
     DM U_DM (
         .Addr(ALU_result_r[11:2]), .WD(RD2_r), .DMCtrl(DMCtrl), .clk(clk), .RD(RD)
     );
 
-    // Flopr for DR (Data Register)
-    Flopr U_DR (
-        .clk(clk), .rst(rst), .in_data(RD), .out_data(DR_out)
-    );
-
     assign DR_out = RD;
-
+    // // Flopr for DR (Data Register)
+    // Flopr U_DR (
+    //     .clk(clk), .rst(rst), .in_data(RD), .out_data(DR_out)
+    // );
 endmodule

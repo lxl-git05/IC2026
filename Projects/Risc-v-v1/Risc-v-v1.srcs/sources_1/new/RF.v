@@ -13,6 +13,25 @@ module RF(
 
     reg [31:0] register [0:31];
 
+        integer i;
+    // 初始化寄存器
+    initial begin
+        // 全部清零
+        for(i = 0; i < 32; i = i + 1)
+            register[i] = 32'd0;
+
+        // DEBUG使用
+        // 给测试数据
+        register[2] = 32'd10;
+        register[3] = 32'd20;
+
+        register[5] = 32'd30;
+        register[6] = 32'd40;
+
+        register[8] = 32'd50;
+        register[9] = 32'd60;
+    end
+
     // write
     always @(posedge clk) begin
         if (RFWrite && (WR != 0))   // 不准修改x0

@@ -8,7 +8,7 @@ module IM(InsMemRW, addr,Ins);
 
     always @(addr or InsMemRW) begin
         if (InsMemRW) begin
-            Ins = memory[addr]; // 读取指令,这里从<=修改位=,因为IM是组合逻辑电路,不需要时序逻辑的非阻塞赋值
+            Ins = memory[addr]; // 读取指令,这里从<=修改为=,因为IM是组合逻辑电路,不需要时序逻辑的非阻塞赋值
         end
     end
 

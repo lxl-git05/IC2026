@@ -8,60 +8,62 @@ module ControlUnit(
     input [6:0] opcode,
     input [6:0] Funct7,
     input [2:0] Funct3,
-    output wire PCWrite,
-    output wire InsMemRW,
-    output wire IRWrite,
-    output wire RFWrite,
-    output wire DMCtrl,
-    output wire ExtSel,
-    output wire ALUSrcA,
-    output wire [1:0] ALUSrcB,
-    output wire [1:0] RegSel,
-    output wire [1:0] NPCOp,
-    output wire [1:0] WDSel,
-    output reg [3:0] ALUOp
+    output wire PCWrite,         // IF阶段,恒为1
+    output wire InsMemRW,        // IF阶段,恒为1
+    output wire IRWrite,         // IF_ID的锁存信号,暂时恒为1
+    output reg  RFWrite,         // 在ID阶段就使用,不需要打拍
+    output reg DMCtrl,           // MEM
+    output wire ExtSel,          // 在ID阶段就使用,不需要打拍
+    output reg [1:0] ALUSrcA,    // EX,位宽修改
+    output reg [2:0] ALUSrcB,    // EX,位宽修改
+    output wire [1:0] RegSel,    // 在ID阶段就使用,不需要打拍
+    output reg [1:0] NPCOp,      // EX
+    output reg [1:0] WDSel,      // WB
+    output reg [3:0] ALUOp,      // EX
+
+    output wire NPC_Enable,      // 新增: 默认流水线中NPC_Enable为0,流水线中NPC_Enable为1时,PC为NPC,为0:PC+4
+    input [4:0] rs1 , rs2 , rd               // 新增: rd,用来判断数据是否需要前递
 );
 
     // 先得到类型,好进行下面的分析 (暂时不支持U型指令)
-    wire R_type;
-    wire I_type;
-    wire Load_type;
-    wire Store_type;
-    wire Branch_type;
-    wire JAL_type;
-    wire JALR_type;
-
-    assign R_type      = (opcode == 7'b0110011);
-    assign I_type      = (opcode == 7'b0010011);
-    assign Load_type   = (opcode == 7'b0000011);
-    assign Store_type  = (opcode == 7'b0100011);
-    assign Branch_type = (opcode == 7'b1100011);
-    assign JAL_type    = (opcode == 7'b1101111);
-    assign JALR_type   = (opcode == 7'b1100111);
+    wire R_type;            assign R_type      = (opcode === 7'b0110011) ? 1'b1 : 1'b0;
+    wire I_type;            assign I_type      = (opcode === 7'b0010011) ? 1'b1 : 1'b0;                   
+    wire Load_type;         assign Load_type   = (opcode === 7'b0000011) ? 1'b1 : 1'b0;
+    wire Store_type;        assign Store_type  = (opcode === 7'b0100011) ? 1'b1 : 1'b0;
+    wire Branch_type;       assign Branch_type = (opcode === 7'b1100011) ? 1'b1 : 1'b0;
+    wire JAL_type;          assign JAL_type    = (opcode === 7'b1101111) ? 1'b1 : 1'b0;
+    wire JALR_type;         assign JALR_type   = (opcode === 7'b1100111) ? 1'b1 : 1'b0;
     
-    // 单周期逻辑书写
-    assign PCWrite  = 1'b1 ;    // PC每个周期都要更新
-    assign InsMemRW = 1'b1 ;    // 每个周期都要读指令
-    assign IRWrite  = 1'b1 ;    // 这个有锁存功能,暂时不使用
+    // 定义当前ID阶段的信号
+    wire RFWrite_ID;
+    wire DMCtrl_ID;
+    wire [1:0] ALUSrcA_ID;
+    wire [2:0] ALUSrcB_ID;
+    wire [1:0] NPCOp_ID;
+    wire [1:0] WDSel_ID;
+    reg  [3:0] ALUOp_ID;
 
-    assign RFWrite = R_type | I_type | Load_type | JAL_type | JALR_type;
-    assign DMCtrl  = Store_type ;       // Store指令写内存,其他指令不写内存
+    // 新增部分
+    assign NPC_Enable = 0;
+    // ID阶段信号的组合逻辑,根据指令类型和功能码生成控制信号
+    assign PCWrite  = rst ? 1'b0 : 1'b1 ;    // PC每个周期都要更新
+    assign InsMemRW = rst ? 1'b0 : 1'b1 ;    // 每个周期都要读指令
+    assign IRWrite  = rst ? 1'b0 : 1'b1 ;    // 这个有锁存功能,暂时不使用
+    assign RegSel  = `RegSel_rd ;       // 默认使用rd作为目的寄存器,其他指令也无所谓
+
+    assign RFWrite_ID  = rst ? 1'b0 : R_type | I_type | Load_type | JAL_type | JALR_type;
+    assign DMCtrl_ID   = Store_type ;       // Store指令写内存,其他指令不写内存
     assign ExtSel =
         (I_type && (
             Funct3 == 3'b110 ||
             Funct3 == 3'b111 ||
             Funct3 == 3'b100 )) ? `ExtSel_ZERO : `ExtSel_SIGNED;
-    assign ALUSrcA = `ALUSrcA_A ;         // JAL指令使用PC作为ALU的第一个操作数,其他指令使用Rs1(其实无所谓)
-    assign ALUSrcB = 
-        (R_type) ? `ALUSrcB_B : 
-        (I_type | Load_type | JALR_type) ? `ALUSrcB_Imm : 
-        (Store_type | JAL_type) ? `ALUSrcB_Offset : `ALUSrcB_else ;
-    assign RegSel  = `RegSel_rd ;       // 默认使用rd作为目的寄存器,其他指令也无所谓
-    assign NPCOp   = 
+    
+    assign NPCOp_ID   = 
         (Branch_type && ((Funct3 == 3'b000 && zero) | (Funct3 == 3'b001 && !zero))) ? `NPC_Offset12 : 
         (JAL_type)    ? `NPC_Offset20 : 
         (JALR_type)   ? `NPC_rs : `NPC_PC ;
-    assign WDSel = Load_type ? `WDSel_FromMEM : 
+    assign WDSel_ID = Load_type ? `WDSel_FromMEM : 
                    (JAL_type | JALR_type)  ? `WDSel_FromPC : `WDSel_FromALU ;
 
     // ALU控制信号
@@ -74,54 +76,172 @@ module ControlUnit(
                     3'b000:
                     begin
                         if(Funct7 == 7'b0000000)
-                            ALUOp = 4'b0000; // ADD
+                            ALUOp_ID = 4'b0000; // ADD
                         else if(Funct7 == 7'b0100000)
-                            ALUOp = 4'b0001; // SUB
+                            ALUOp_ID = 4'b0001; // SUB
                     end
                     3'b111:
-                        ALUOp = 4'b0010; // AND
+                        ALUOp_ID = 4'b0010; // AND
                     3'b110:
-                        ALUOp = 4'b0011; // OR
+                        ALUOp_ID = 4'b0011; // OR
                     3'b100:
-                        ALUOp = 4'b0100; // XOR
+                        ALUOp_ID = 4'b0100; // XOR
                     3'b001:
-                        ALUOp = 4'b0101; // SLL
+                        ALUOp_ID = 4'b0101; // SLL
                     3'b101:
                     begin
                         if(Funct7 == 7'b0000000)
-                            ALUOp = 4'b0110; // SRL
+                            ALUOp_ID = 4'b0110; // SRL
                         else if(Funct7 == 7'b0100000)
-                            ALUOp = 4'b0111; // SRA
+                            ALUOp_ID = 4'b0111; // SRA
                     end
                     3'b010:
-                        ALUOp = 4'b1000; // SLT
+                        ALUOp_ID = 4'b1000; // SLT
                     3'b011:
-                        ALUOp = 4'b1001; // SLTU
+                        ALUOp_ID = 4'b1001; // SLTU
                 endcase
             end
             7'b0010011: // I-Type
             begin
                 case(Funct3)
                     3'b000:
-                        ALUOp = 4'b0000; // ADDI
+                        ALUOp_ID = 4'b0000; // ADDI
                     3'b111:
-                        ALUOp = 4'b0010; // ANDI
+                        ALUOp_ID = 4'b0010; // ANDI
                     3'b110:
-                        ALUOp = 4'b0011; // ORI
+                        ALUOp_ID = 4'b0011; // ORI
                     3'b100:
-                        ALUOp = 4'b0100; // XORI
+                        ALUOp_ID = 4'b0100; // XORI
                 endcase
             end
             7'b0000011: // Load
-                ALUOp = 4'b0000;
+                ALUOp_ID = 4'b0000;
             7'b0100011: // Store
-                ALUOp = 4'b0000;
+                ALUOp_ID = 4'b0000;
             7'b1100011: // Branch
-                ALUOp = 4'b0001;
+                ALUOp_ID = 4'b0001;
             7'b1100111: //JALR
-                ALUOp = 4'b0000;// 执行加法 rs1 +imm
+                ALUOp_ID = 4'b0000;// 执行加法 rs1 +imm
             default:
-                ALUOp = 4'b0000;
+                ALUOp_ID = 4'b0000;
         endcase
     end
+
+    // 信号打拍延迟,实现流水线全局控制
+    // ID阶段省略了打拍,因为ID阶段的控制信号在IF阶段就已经生成了,不需要打拍
+    // EX阶段
+    reg RFWrite_EX;
+    reg DMCtrl_EX;
+    reg [1:0] ALUSrcA_EX;
+    reg [2:0] ALUSrcB_EX;
+    reg [1:0] NPCOp_EX;
+    reg [1:0] WDSel_EX;
+    reg [3:0] ALUOp_EX;
+    // MEM阶段
+    reg RFWrite_MEM;
+    reg DMCtrl_MEM;
+    reg [1:0] WDSel_MEM;
+    // WB阶段
+    reg RFWrite_WB;
+    reg [1:0] WDSel_WB;
+
+    // 信号打拍
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            // 复位时清空所有流水线控制信号（注入气泡）
+            RFWrite_EX <= 0;
+            DMCtrl_EX  <= 0;
+            ALUSrcA_EX <= 2'b00;
+            ALUSrcB_EX <= 3'b000;
+            NPCOp_EX   <= 2'b00;
+            WDSel_EX   <= 2'b00;
+            ALUOp_EX   <= 4'b0000;
+            RFWrite_MEM <= 0;
+            DMCtrl_MEM <= 0;
+            WDSel_MEM <= 2'b00;
+            RFWrite_WB <= 0;
+            WDSel_WB   <= 2'b00;
+        end else begin
+            // 每一个时钟上升沿，信号向后传递一拍
+            // ID -> EX
+            RFWrite_EX <= RFWrite_ID;
+            DMCtrl_EX <= DMCtrl_ID;
+            ALUSrcA_EX <= ALUSrcA_ID;
+            ALUSrcB_EX <= ALUSrcB_ID;
+            NPCOp_EX <= NPCOp_ID;
+            WDSel_EX <= WDSel_ID;
+            ALUOp_EX <= ALUOp_ID;
+
+            // EX -> MEM
+            RFWrite_MEM <= RFWrite_EX;
+            DMCtrl_MEM <= DMCtrl_EX;
+            WDSel_MEM <= WDSel_EX;
+            // MEM -> WB
+            RFWrite_WB <= RFWrite_MEM;
+            WDSel_WB   <= WDSel_MEM;
+        end
+    end
+
+    // 信号输出: 将不同阶段的寄存器值赋给最终输出端口
+    always @(*) begin
+        // EX 级信号
+        ALUSrcA = ALUSrcA_EX ;
+        ALUSrcB = ALUSrcB_EX ;
+        NPCOp = NPCOp_EX     ;
+        ALUOp = ALUOp_EX     ;
+        // MEM 级信号
+        DMCtrl   = DMCtrl_MEM;
+        // WB 级信号
+        RFWrite  = RFWrite_WB;
+        WDSel    = WDSel_WB;
+    end
+
+    // 新增: 数据前递处理
+    // 切记,现在是在ID阶段的预判,但是真实的数据前递需要站在下一个周期(EX)的视角,使用数据全都需要打1个拍
+    // 所以rd_mem的RFWrite信号当前还在EX阶段...
+    // rs1打拍延迟
+    // wire [4:0] rs1_delay_1;  // 延迟1拍
+    // Delay #(5) Delay_rs_inst_1 (
+    //     .clk(clk),
+    //     .rst(rst),
+    //     .in(rs1),
+    //     .delay_num(2'b01),  // 1周期延迟
+    //     .out(rs1_delay_1)
+    // );
+    // // rs2打拍延迟
+    // wire [4:0] rs2_delay_1;  // 延迟1拍
+    // Delay #(5) Delay_rs_inst_2 (
+    //     .clk(clk),
+    //     .rst(rst),
+    //     .in(rs2),
+    //     .delay_num(2'b01),  // 1周期延迟
+    //     .out(rs2_delay_1)
+    // );
+    // rd打拍延迟
+    wire [4:0] rd_delay_1;  // 延迟2拍(也就是ex_mem的数据前递)
+    wire [4:0] rd_delay_2;  // 延迟3拍(也就是mem_wb的数据前递),而wb写回可以通过下降沿写回实现前递,所以不需要rd_delay_3
+    Delay #(5) Delay_rd_inst_1 (
+        .clk(clk),
+        .rst(rst),
+        .in(rd),
+        .delay_num(2'b01),  // 1周期延迟
+        .out(rd_delay_1)
+    );
+    Delay #(5) Delay_rd_inst_2 (
+        .clk(clk),
+        .rst(rst),
+        .in(rd),
+        .delay_num(2'b10),  // 2周期延迟
+        .out(rd_delay_2)
+    );
+    // 确定在ex_mem或mem_wb阶段是在进行数据写入的指令,并且目的寄存器不是x0,并且目的寄存器和当前指令的rs1相同,则需要前递
+    assign ALUSrcA_ID = (RFWrite_EX && rd_delay_1 != 0 && rd_delay_1 == rs1) ? 2'b10 : 
+                        (RFWrite_MEM  && rd_delay_2 != 0 && rd_delay_2 == rs1) ? 2'b11 : 2'b00 ;
+    // 确定在ex_mem或mem_wb阶段是在进行数据写入的指令,并且目的寄存器不是x0,并且目的寄存器和当前指令的rs2相同,则需要前递
+    assign ALUSrcB_ID = ((R_type) && RFWrite_EX && rd_delay_1 != 0 && rd_delay_1 == rs2) ? 3'b011 : 
+                        ((R_type) && RFWrite_MEM  && rd_delay_2 != 0 && rd_delay_2 == rs2) ? 3'b100 : 
+                        (R_type) ? 3'b000 :
+                        (I_type | Load_type | JALR_type) ? 3'b001 :
+                        (Store_type | JAL_type) ? 3'b010 : 3'b000 ;
+
 endmodule

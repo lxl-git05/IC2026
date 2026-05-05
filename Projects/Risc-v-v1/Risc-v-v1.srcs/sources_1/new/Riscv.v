@@ -3,8 +3,9 @@
 module riscv(clk, rst);
     input clk, rst;
 
-    wire RFWrite, DMCtrl, PCWrite, IRWrite, InsMemRW, ExtSel, zero, ALUSrcA;
-    wire [1:0] ALUSrcB;
+    wire RFWrite, DMCtrl, PCWrite, IRWrite, InsMemRW, ExtSel, zero;
+    wire [1:0] ALUSrcA; // 位宽修改
+    wire [2:0] ALUSrcB; // 位宽修改
     wire [1:0] NPCOp, WDSel, RegSel;
     wire [3:0] ALUOp;
     wire [6:0] opcode;
@@ -35,13 +36,16 @@ module riscv(clk, rst);
     // INSTR_BTYPE_OP->branch[12:1]  INSTR_SW_OP->sw 否则->I型指令
     assign Offset   = (opcode == `INSTR_BTYPE_OP) ? {out_ins[31],out_ins[7],out_ins[30:25],out_ins[11:8]} :
                       (opcode == `INSTR_SW_OP)    ? {out_ins[31:25],out_ins[11:7]} : Imm12;
+    
+    // 新增
+    wire [31:0] PC_out; // 从IR输出的PC值
 
     // ControlUnit
     ControlUnit U_ControlUnit(
         .clk(clk), .rst(rst), .zero(zero), .opcode(opcode), .Funct7(Funct7), .Funct3(Funct3),
         .RFWrite(RFWrite), .DMCtrl(DMCtrl), .PCWrite(PCWrite), .IRWrite(IRWrite), .InsMemRW(InsMemRW),
         .ExtSel(ExtSel), .ALUOp(ALUOp), .NPCOp(NPCOp), .ALUSrcA(ALUSrcA),
-        .WDSel(WDSel), .ALUSrcB(ALUSrcB), .RegSel(RegSel)
+        .WDSel(WDSel), .ALUSrcB(ALUSrcB), .RegSel(RegSel) , .NPC_Enable(NPC_Enable) , .rs1(rs1) , .rs2(rs2) , .rd(rd)
     );
 
     // PC
@@ -49,21 +53,21 @@ module riscv(clk, rst);
         .clk(clk), .rst(rst), .PCWrite(PCWrite), .NPC(NPC), .PC(PC)
     );
 
-    // NPC
-    NPC U_NPC (
-        .PC(PC), .NPCOp(NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs(RD1), .PCA4(PCA4), .NPC(NPC)
-    );
+    // NPC:暂时屏蔽跳转信号,默认PC每次加4
+    // NPC U_NPC (
+    //     .PC(PC), .NPCOp(NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs(RD1), .PCA4(PCA4), .NPC(NPC)
+    // );
 
     // IM
     IM U_IM (
         .addr(PC[11:2]), .Ins(in_ins), .InsMemRW(InsMemRW)
     );
 
-    assign out_ins = in_ins;
-    // // IR
-    // IR U_IR (
-    //     .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins)
-    // );
+    // assign out_ins = in_ins;
+    // IR
+    IR U_IR (
+        .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins), .PC_in(PC) , .PC_out(PC_out)
+    );
 
     // RF
     RF U_RF (
@@ -78,20 +82,20 @@ module riscv(clk, rst);
 
     // MUX_3to1_LMD
     MUX_3to1_LMD U_MUX_3to1_LMD (
-        .X(ALU_result_r), .Y(DR_out), .Z(PCA4), .control(WDSel), .out(WD)
+        .clk(clk), .X(ALU_result_r), .Y(DR_out), .Z(PCA4), .control(WDSel), .out(WD)
     );
 
-    assign RD1_r = RD1;
-    assign RD2_r = RD2;
-    // // Flopr for RD1
-    // Flopr U_A (
-    //     .clk(clk), .rst(rst), .in_data(RD1), .out_data(RD1_r)
-    // );
+    // assign RD1_r = RD1;
+    // assign RD2_r = RD2; 
+    // Flopr for RD1
+    Flopr U_A (
+        .clk(clk), .rst(rst), .in_data(RD1), .out_data(RD1_r)
+    );
 
-    // // Flopr for RD2
-    // Flopr U_B (
-    //     .clk(clk), .rst(rst), .in_data(RD2), .out_data(RD2_r)
-    // );
+    // Flopr for RD2
+    Flopr U_B (
+        .clk(clk), .rst(rst), .in_data(RD2), .out_data(RD2_r)
+    );
 
     // EXT
     EXT U_EXT (
@@ -100,12 +104,12 @@ module riscv(clk, rst);
 
     // MUX_2to1_A
     MUX_2to1_A U_MUX_2to1_A (
-        .X(RD1_r), .Y(32'h0), .control(ALUSrcA), .out(A)
+        .clk(clk), .X(RD1_r), .Y(32'h0), .ALU_result_r(ALU_result_r), .control(ALUSrcA), .out(A)
     );
 
     // MUX_3to1_B
     MUX_3to1_B U_MUX_3to1_B (
-        .X(RD2_r), .Y(Imm32), .Z(Offset), .control(ALUSrcB), .out(B)
+        .clk(clk), .X(RD2_r), .ALU_result_r(ALU_result_r), .Y(Imm32), .Z(Offset), .control(ALUSrcB), .out(B)
     );
 
     // ALU
@@ -113,20 +117,20 @@ module riscv(clk, rst);
         .A(A), .B(B), .ALUOp(ALUOp), .ALU_result(ALU_result), .zero(zero)
     );
 
-    assign ALU_result_r = ALU_result;
-    // // Flopr for ALU_result
-    // Flopr U_ALUOut (
-    //     .clk(clk), .rst(rst), .in_data(ALU_result), .out_data(ALU_result_r)
-    // );
+    // assign ALU_result_r = ALU_result;
+    // Flopr for ALU_result
+    Flopr U_ALUOut (
+        .clk(clk), .rst(rst), .in_data(ALU_result), .out_data(ALU_result_r)
+    );
 
     // DM
     DM U_DM (
         .Addr(ALU_result_r[11:2]), .WD(RD2_r), .DMCtrl(DMCtrl), .clk(clk), .RD(RD)
     );
 
-    assign DR_out = RD;
-    // // Flopr for DR (Data Register)
-    // Flopr U_DR (
-    //     .clk(clk), .rst(rst), .in_data(RD), .out_data(DR_out)
-    // );
+    // assign DR_out = RD;
+    // Flopr for DR (Data Register)
+    Flopr U_DR (
+        .clk(clk), .rst(rst), .in_data(RD), .out_data(DR_out)
+    );
 endmodule

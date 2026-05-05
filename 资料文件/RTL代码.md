@@ -489,6 +489,7 @@ module riscv(clk, rst);
     wire [31:0] in_ins, out_ins, RD, DR_out;
     wire [4:0] rs1, rs2, rd;
     wire [11:0] Imm12;
+    wire [11:0] Imm32;
     wire [20:1] Offset20;
     wire [11:0] Offset;
     wire [4:0] WR;
@@ -618,7 +619,7 @@ int main()
     asm volatile("ori x3 ,x0 ,0 ");
     asm volatile("add x11,x2,x1 ");
     asm volatile("sub x12,x2,x1 ");
-    asm volatile("addi x13,x2 ,1 "); /
+    asm volatile("addi x13,x2 ,1 "); // 
     asm volatile("or  x14,x2,x3 ");
     asm volatile("and x15,x1,x2 ");
     asm volatile("xor x19,x2,x1 ");

@@ -13,7 +13,7 @@ module RF(
 
     reg [31:0] register [0:31];
 
-        integer i;
+    integer i;
     // 初始化寄存器
     initial begin
         // 全部清零
@@ -32,14 +32,24 @@ module RF(
         register[9] = 32'd60;
     end
 
+    // WR打拍延迟
+    wire [4:0] WR_delay;
+    Delay #(5) Delay_inst (
+        .clk(clk),
+        .rst(rst),
+        .in(WR),
+        .delay_num(2'b11),  // 3周期延迟
+        .out(WR_delay)
+    );
+
     // write
-    always @(posedge clk) begin
-        if (RFWrite && (WR != 0))   // 不准修改x0
-            register[WR] <= WD;
+    always @(negedge clk) begin
+        if (RFWrite && (WR_delay != 0))   // 不准修改x0
+            register[WR_delay] <= WD;
     end
 
     // read（组合逻辑）
-    assign RD1 = (RR1 == 0) ? 32'b0 : register[RR1];    // x0就是0
-    assign RD2 = (RR2 == 0) ? 32'b0 : register[RR2];
+    assign RD1 = (RR1 === 0) ? 32'b0 : register[RR1];    // x0就是0
+    assign RD2 = (RR2 === 0) ? 32'b0 : register[RR2];
 
 endmodule

@@ -32,6 +32,12 @@ module ControlUnit(
     wire Branch_type;       assign Branch_type = (opcode === 7'b1100011) ? 1'b1 : 1'b0;
     wire JAL_type;          assign JAL_type    = (opcode === 7'b1101111) ? 1'b1 : 1'b0;
     wire JALR_type;         assign JALR_type   = (opcode === 7'b1100111) ? 1'b1 : 1'b0;
+    wire BEQ_type;          assign BEQ_type    = (opcode === 7'b1100011 && Funct3 === 3'b000) ? 1'b1 : 1'b0;
+    wire BNE_type;          assign BNE_type    = (opcode === 7'b1100011 && Funct3 === 3'b001) ? 1'b1 : 1'b0;
+
+// 如果后续逻辑需要统一处理 B 类型指令（例如提取偏移量），可以保留一个组合信号
+wire B_type;
+assign B_type = BEQ_type | BNE_type;
     
     // ======================== 流水线信号定义 ========================
     // ID阶段
@@ -112,6 +118,30 @@ module ControlUnit(
 
     // ID注入气泡,下放到各个ID阶段的Control
 
+    // ======================== BNE和BEQ与Zreo处理 ========================
+    // ID阶段的Type打1拍到EX阶段使用
+    wire BNE_Type_EX, BEQ_Type_EX;
+    Delay #(1) Delay_BNE_Type_EX_inst (
+        .clk(clk),
+        .rst(rst),
+        .in(BNE_type),
+        .delay_num(2'b01),  // 1周期延迟
+        .out(BNE_Type_EX)
+    );
+    Delay #(1) Delay_BEQ_Type_EX_inst (
+        .clk(clk),
+        .rst(rst),
+        .in(BEQ_type),
+        .delay_num(2'b01),  // 1周期延迟
+        .out(BEQ_Type_EX)
+    );
+    // 在EX阶段根据指令类型和zero信号判断是否需要跳转,如果是BEQ指令且zero为1,或者是BNE指令且zero为0,则需要跳转
+    // 所以需要修改NPCOp的生成逻辑,如果是BEQ指令且zero为1,或者是BNE指令且zero为0,则NPCOp为Offset12,否则继续为NPC_EX
+    always @(*) begin
+        // EX 级信号,NPCOp进行特殊处理
+        NPCOp = (BNE_Type_EX && zero == 1'b0) || (BEQ_Type_EX && zero == 1'b1) ? `NPC_Offset12 : NPCOp_EX ;
+    end
+
     // ======================== 一般组合逻辑 ========================
     // ID阶段信号的组合逻辑,根据指令类型和功能码生成控制信号
     assign InsMemRW = rst ? 1'b0 : 1'b1 ;    // 每个周期都要读指令
@@ -125,9 +155,9 @@ module ControlUnit(
             Funct3 == 3'b111 ||
             Funct3 == 3'b100 )) ? `ExtSel_ZERO : `ExtSel_SIGNED;
     
-    assign NPCOp_ID   = 
+    assign NPCOp_ID   = // 注意: 这里直接忽略了B型指令的跳转情况,因为ID阶段无法知道zero信号,所以只能在EX阶段进行修改
         load_use_hazard ? `NPC_PC :
-        (Branch_type && ((Funct3 == 3'b000 && zero) | (Funct3 == 3'b001 && !zero))) ? `NPC_Offset12 : 
+        (Branch_type) ? `NPC_PC :           // 默认不跳转
         (JAL_type)    ? `NPC_Offset20 : 
         (JALR_type)   ? `NPC_rs : `NPC_PC ;
     assign WDSel_ID = load_use_hazard ? `WDSel_FromALU : Load_type ? `WDSel_FromMEM : 
@@ -217,7 +247,7 @@ module ControlUnit(
             DMCtrl_EX   <= DMCtrl_ID;
             ALUSrcA_EX  <= ALUSrcA_ID;
             ALUSrcB_EX  <= ALUSrcB_ID;
-            NPCOp_EX    <= NPCOp_ID;
+            NPCOp_EX    <= NPCOp_ID;        // 这里由于需要B型跳转,所以需要与zero进行判断比较,所以是NPCOp的选项之一
             WDSel_EX    <= WDSel_ID;
             ALUOp_EX    <= ALUOp_ID;
 
@@ -235,7 +265,7 @@ module ControlUnit(
         // EX 级信号
         ALUSrcA = ALUSrcA_EX ;
         ALUSrcB = ALUSrcB_EX ;
-        NPCOp = NPCOp_EX     ;
+        // NPCOp = NPCOp_EX     ;
         ALUOp = ALUOp_EX     ;
         // MEM 级信号
         DMCtrl   = DMCtrl_MEM;

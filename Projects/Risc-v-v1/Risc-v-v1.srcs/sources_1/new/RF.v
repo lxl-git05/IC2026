@@ -13,34 +13,39 @@ module RF(
 
     reg [31:0] register [0:31];
 
-    integer i;
-    // 初始化寄存器
-    initial begin
-        // 全部清零
-        for(i = 0; i < 32; i = i + 1)
-            register[i] = 32'd0;
+    // integer i;
+    // // 初始化寄存器
+    // initial begin
+    //     // 全部清零
+    //     for(i = 0; i < 32; i = i + 1)
+    //         register[i] = 32'd0;
 
-        // DEBUG使用
-        // 给测试数据
-        register[2] = 32'd10;
-        register[3] = 32'd20;
+    //     // DEBUG使用
+    //     // 给测试数据
+    //     register[2] = 32'd10;
+    //     register[3] = 32'd20;
 
-        register[5] = 32'd30;
-        register[6] = 32'd40;
+    //     register[5] = 32'd30;
+    //     register[6] = 32'd40;
 
-        register[8] = 32'd50;
-        register[9] = 32'd60;
-    end
+    //     register[8] = 32'd50;
+    //     register[9] = 32'd60;
+    // end
 
     // WR打拍延迟
-    wire [4:0] WR_delay;
-    Delay #(5) Delay_inst (
-        .clk(clk),
-        .rst(rst),
-        .in(WR),
-        .delay_num(2'b11),  // 3周期延迟
-        .out(WR_delay)
-    );
+    // WR打拍延迟
+    reg [4:0] WR_d1;
+    reg [4:0] WR_d2;
+    reg [4:0] WR_delay;
+
+    always @(posedge clk) begin
+        // stage1
+        WR_d1 <= (WR === 5'bx) ? 5'b0 : WR;
+        // stage2
+        WR_d2 <= WR_d1;
+        // stage3
+        WR_delay <= WR_d2;
+    end
 
     // write
     always @(negedge clk) begin

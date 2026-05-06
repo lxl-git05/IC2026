@@ -12,6 +12,7 @@ riscv U_RISCV(
 initial begin
     // $readmemh ("../hex/code.hex", U_RISCV.U_IM.memory);
     $readmemh ("E:/IC_Competition/IC2026/Projects/Risc-v-v1/cpu_test.txt", U_RISCV.U_IM.memory);
+    // $readmemh ("E:/IC_Competition/IC2026/Projects/Risc-v-v1/cpu_test.hex", U_RISCV.U_IM.memory);
     // $display("Instruction memory initialized");
     // $monitor("PC = 0x%8X, IR = 0x%8X",U_RISCV.U_PC.PC, U_RISCV.out_ins );
     clk = 1 ;

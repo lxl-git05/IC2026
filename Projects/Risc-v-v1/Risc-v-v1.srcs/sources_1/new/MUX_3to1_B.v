@@ -9,30 +9,14 @@ module MUX_3to1_B(clk,X,Y,Z,ALU_result_r,control,out);
     output reg signed [31:0] out;
 
     // 新增: Y,Z,ALU_result 延迟1拍
-    wire [31:0] Y_delay;
-    wire [11:0] Z_delay;
-    wire [31:0] ALU_result_r_delay_1;
-    Delay  #(32)Delay_inst_ALU_result_1 (
-        .clk(clk),
-        .rst(1'b0),
-        .in(ALU_result_r),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(ALU_result_r_delay_1)
-    );
-    Delay  #(32)Delay_inst_Y (
-        .clk(clk),
-        .rst(1'b0),
-        .in(Y),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(Y_delay)
-    );
-    Delay  #(12)Delay_inst_Z (
-        .clk(clk),
-        .rst(1'b0),
-        .in(Z),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(Z_delay)
-    );
+    reg [31:0] ALU_result_r_delay_1;
+    reg [31:0] Y_delay;
+    reg [11:0] Z_delay;
+    always @(posedge clk) begin
+        ALU_result_r_delay_1  <= (ALU_result_r === 32'bx) ? 32'b0 : ALU_result_r;
+        Y_delay               <= (Y === 32'bx) ? 32'b0 : Y;
+        Z_delay               <= (Z === 12'bx) ? 12'b0 : Z;
+    end
     // 输出结果
     always @ (*) begin
         case(control)

@@ -17,49 +17,34 @@ module NPC(clk,rst,NPCOp,Offset12,Offset20,PC,rs,PCA4, NPC,rs_A);
     wire signed [31:0] offset_JalR;   assign offset_JalR = {{20{Offset12[11]}}, Offset12[11:0]} ;
 
     // 信号延迟
-    wire [31:0] PC_ID;
-    wire [31:0] PC_EX;
-    wire [31:0] Offset_B_EX;       // 来自ID
-    wire [31:0] Offset_JAL_EX;     // 来自ID
-    wire [31:0] offset_JalR_EX;    // 来自ID
-
     // 进行PC延迟,从IF到EX,延迟2拍
-    Delay #(32) Delay_PC_inst_1 (
-        .clk(clk),
-        .rst(rst),
-        .in(PC),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(PC_ID)
-    );
-    Delay #(32) Delay_PC_inst_2 (
-        .clk(clk),
-        .rst(rst),
-        .in(PC_ID),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(PC_EX)
-    );
-    // 进行offset延迟
-    Delay #(32) Delay_Offset_B_inst (
-        .clk(clk),
-        .rst(rst),
-        .in(Offset_B),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(Offset_B_EX)
-    );
-    Delay #(32) Delay_Offset_JAL_inst (
-        .clk(clk),
-        .rst(rst),
-        .in(Offset_JAL),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(Offset_JAL_EX)
-    );
-    Delay #(32) Delay_offset_JalR_inst (
-        .clk(clk),
-        .rst(rst),
-        .in(offset_JalR),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(offset_JalR_EX)
-    );
+    reg [31:0] PC_ID;
+    reg [31:0] PC_EX;
+    reg [31:0] Offset_B_EX;
+    reg [31:0] Offset_JAL_EX;
+    reg [31:0] offset_JalR_EX;
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            PC_ID         <= 32'b0;
+            PC_EX         <= 32'b0;
+            Offset_B_EX   <= 32'b0;
+            Offset_JAL_EX <= 32'b0;
+            offset_JalR_EX<= 32'b0;
+        end
+        else begin
+            // IF → ID
+            PC_ID <= (PC === 32'bx) ? 32'b0 : PC;
+
+            // ID → EX
+            PC_EX <= PC_ID;
+
+            // ID → EX (branch/jump offsets)
+            Offset_B_EX    <= (Offset_B === 32'bx) ? 32'b0 : Offset_B;
+            Offset_JAL_EX  <= (Offset_JAL === 32'bx) ? 32'b0 : Offset_JAL;
+            offset_JalR_EX <= (offset_JalR === 32'bx) ? 32'b0 : offset_JalR;
+        end
+    end
     
     always@(*) begin
         case(NPCOp)
@@ -72,16 +57,24 @@ module NPC(clk,rst,NPCOp,Offset12,Offset20,PC,rs,PCA4, NPC,rs_A);
         // PCA4 = PC_EX+4;  // 给jal和jalr使用的rd = PC + 4 存储
     end
 
-    wire [31:0] PCA4_EX;
-    assign PCA4_EX = PC_EX + 4;
+    // 输出PCA4
+    wire [31:0] PCA4_EX;  assign PCA4_EX = PC_EX + 4;
+    reg  [31:0] PCA4_MEM;
+    reg  [31:0] PCA4_WB;
 
-    // 发送PCA4需要延迟两拍到WB阶段
-    Delay #(32) Delay_PCA4_inst (
-        .clk(clk),
-        .rst(rst),
-        .in(PCA4_EX),
-        .delay_num(2'b10),  // 2周期延迟
-        .out(PCA4)
-    );
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            PCA4_MEM <= 32'b0;
+            PCA4_WB  <= 32'b0;
+        end
+        else begin
+            // EX → MEM（第1拍）
+            PCA4_MEM <= PCA4_EX;
+            // MEM → WB（第2拍）
+            PCA4_WB  <= PCA4_MEM;
+        end
+    end
+
+    assign PCA4 = PCA4_WB;
 
 endmodule

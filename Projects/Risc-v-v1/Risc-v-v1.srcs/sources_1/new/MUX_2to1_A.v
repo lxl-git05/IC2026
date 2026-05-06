@@ -8,14 +8,10 @@ module MUX_2to1_A(clk,X,Y,ALU_result_r,control,out);
     output [31:0] out;
 
     // 先进行delay
-    wire [31:0] ALU_result_r_delay_1;  // 延迟1拍
-    Delay #(32) Delay_inst_1 (
-        .clk(clk),
-        .rst(1'b0),
-        .in(ALU_result_r),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(ALU_result_r_delay_1)
-    );
+    reg [31:0] ALU_result_r_delay_1;
+    always @(posedge clk) begin
+        ALU_result_r_delay_1 <= (ALU_result_r === 32'bx) ? 32'b0 : ALU_result_r;
+    end
 
     // 新增: 当control为0时,输出X的值(需要扩展成32位),当control为1时,输出Y的值
     // 新增: 数据前递(control位宽增加)

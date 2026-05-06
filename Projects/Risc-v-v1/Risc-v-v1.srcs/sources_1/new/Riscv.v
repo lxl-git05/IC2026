@@ -81,7 +81,7 @@ module riscv(clk, rst);
     // MUX_3to1_LMD
     MUX_3to1_LMD U_MUX_3to1_LMD (
         .clk(clk), .X(ALU_result_r), .Y(DR_out), .Z(PCA4), .control(WDSel), .out(WD)
-    );
+    ); 
 
     // Flopr for RD1
     Flopr U_A (

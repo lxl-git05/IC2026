@@ -5,25 +5,21 @@ module DM( Addr, WD, clk, DMCtrl, RD);
     input [31:0] WD;
     input clk;
     input DMCtrl;      // 1: Write, 0: Read
-    output [31:0] RD;  // 去掉 reg，改为 wire 类型的异步输出
+    output [31:0] RD;  // 去掉reg , 改为 wire 类型的异步输出
 
     reg [31:0] memory[0:1023];
 
-    // 新增:初始化:直接进行内存清零，避免仅读取垃圾数据,后续需要删除,因为比赛测试不需要内存初始化
-    integer i;
-    initial begin
-        for (i = 0; i < 1024; i = i + 1) memory[i] = 0; // 直接初始化为地址值,方便调试,后续需要删除
-    end
+    // // 新增:初始化:直接进行内存清零，避免仅读取垃圾数据,后续需要删除,因为比赛测试不需要内存初始化
+    // integer i;
+    // initial begin
+    //     for (i = 0; i < 1024; i = i + 1) memory[i] = 0 ; // 直接初始化为地址值,方便调试,后续需要删除
+    // end
 
     // 新增:输入地址打1拍
-    wire [31:0] WD_delay;
-    Delay #(32) Delay_WD_inst (
-        .clk(clk),
-        .rst(1'b0),
-        .in(WD),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(WD_delay)
-    );
+    reg [31:0] WD_delay;
+    always @(posedge clk) begin
+        WD_delay <= (WD === 32'bx) ? 32'b0 : WD;
+    end
 
     // 同步写：必须在时钟上升沿触发
     always @(posedge clk) begin

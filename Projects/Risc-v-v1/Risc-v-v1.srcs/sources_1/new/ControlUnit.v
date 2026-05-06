@@ -12,7 +12,7 @@ module ControlUnit(
     output wire InsMemRW,        // IF阶段,恒为1
     output wire IRWrite,         // IF_ID的锁存信号,暂时恒为1,除非暂停
     output reg  RFWrite,         // 在ID阶段就使用,不需要打拍
-    output reg DMCtrl,           // MEM
+    output reg  DMCtrl,          // MEM
     output wire ExtSel,          // 在ID阶段就使用,不需要打拍
     output reg [1:0] ALUSrcA,    // EX,位宽修改
     output reg [2:0] ALUSrcB,    // EX,位宽修改
@@ -63,27 +63,29 @@ module ControlUnit(
 
     // 新增控制信号定义
     // rd打拍延迟
-    wire [4:0] rd_delay_1;  // 延迟1拍(也就是EX的数据前递)
-    wire [4:0] rd_delay_2;  // 延迟2拍(也就是MEM的数据前递),而wb写回可以通过下降沿写回实现前递,所以不需要rd_delay_3
+    reg [4:0] rd_delay_1;  // 延迟1拍(也就是EX的数据前递)
+    reg [4:0] rd_d1;
+    reg [4:0] rd_delay_2;  // 延迟2拍(也就是MEM的数据前递),而wb写回可以通过下降沿写回实现前递,所以不需要rd_delay_3
     wire stall ;            // 流水线暂停标志
     wire load_use_hazard;   // 判断是否产生冲突4:lw与addi相邻冲突
     wire BranchTaken;
 
     // ======================== 数据冲突1,2,3: ALU结果前递到EX阶段 ========================
-    Delay #(5) Delay_rd_inst_1 (
-        .clk(clk),
-        .rst(rst),
-        .in(rd),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(rd_delay_1)
-    );
-    Delay #(5) Delay_rd_inst_2 (
-        .clk(clk),
-        .rst(rst),
-        .in(rd),
-        .delay_num(2'b10),  // 2周期延迟
-        .out(rd_delay_2)
-    );
+    // 打拍
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            rd_delay_1 <= 5'b0;
+            rd_d1      <= 5'b0;
+            rd_delay_2 <= 5'b0;
+        end
+        else begin
+            // 1拍延迟
+            rd_delay_1 <= (rd === 5'bx) ? 5'b0 : rd;
+            // 2拍延迟
+            rd_d1      <= (rd === 5'bx) ? 5'b0 : rd;
+            rd_delay_2 <= rd_d1;
+        end
+    end
     // 确定在ex_mem或mem_wb阶段是在进行数据写入的指令,并且目的寄存器不是x0,并且目的寄存器和当前指令的rs1相同,则需要前递
     assign ALUSrcA_ID = (stall | BranchTaken) ? 2'b00 :
                         (RFWrite_EX && rd_delay_1 != 0 && rd_delay_1 == rs1) ? 2'b10 : 
@@ -98,14 +100,14 @@ module ControlUnit(
 
     // ======================== 数据冲突4: lw和addi相邻冲突 ========================
     // load_Type 打拍: ID阶段下检查EX阶段是否为Load,所以需要在本阶段打1拍
-    wire Load_EX;
-    Delay #(1) Delay_Load_inst (
-        .clk(clk),
-        .rst(rst),
-        .in(Load_type),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(Load_EX)
-    );
+    reg Load_EX;
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            Load_EX <= 1'b0;
+        else
+            Load_EX <= (Load_type === 1'bx) ? 1'b0 : Load_type;
+    end
+    
     // rd打拍: rd_delay_1 已经定义了,就是EX阶段的rd
     wire hazard_raw;
     assign hazard_raw = Load_EX && (rd_delay_1 != 0) && ((rd_delay_1 == rs1) || ((R_type || Store_type || Branch_type) && (rd_delay_1 == rs2)));
@@ -119,21 +121,17 @@ module ControlUnit(
 
     // ======================== BNE和BEQ与Zreo处理 ========================
     // ID阶段的Type打1拍到EX阶段使用
-    wire BNE_Type_EX, BEQ_Type_EX;
-    Delay #(1) Delay_BNE_Type_EX_inst (
-        .clk(clk),
-        .rst(rst),
-        .in(BNE_type),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(BNE_Type_EX)
-    );
-    Delay #(1) Delay_BEQ_Type_EX_inst (
-        .clk(clk),
-        .rst(rst),
-        .in(BEQ_type),
-        .delay_num(2'b01),  // 1周期延迟
-        .out(BEQ_Type_EX)
-    );
+    reg BNE_Type_EX; reg BEQ_Type_EX;
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            BNE_Type_EX <= 1'b0;
+            BEQ_Type_EX <= 1'b0;
+        end
+        else begin
+            BNE_Type_EX <= (BNE_type === 1'bx) ? 1'b0 : BNE_type;
+            BEQ_Type_EX <= (BEQ_type === 1'bx) ? 1'b0 : BEQ_type;
+        end
+    end
     // 在EX阶段根据指令类型和zero信号判断是否需要跳转,如果是BEQ指令且zero为1,或者是BNE指令且zero为0,则需要跳转
     // 所以需要修改NPCOp的生成逻辑,如果是BEQ指令且zero为1,或者是BNE指令且zero为0,则NPCOp为Offset12,否则继续为NPC_EX
     always @(*) begin
@@ -250,7 +248,6 @@ module ControlUnit(
                 ALUOp_ID = 4'b0000;
         endcase
     end
-
     // ======================== 流水线信号传输 ========================
     always @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -300,5 +297,4 @@ module ControlUnit(
         RFWrite  = RFWrite_WB;
         WDSel    = WDSel_WB;
     end
-
 endmodule

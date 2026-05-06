@@ -65,6 +65,7 @@ module ControlUnit(
     // rd打拍延迟
     wire [4:0] rd_delay_1;  // 延迟1拍(也就是EX的数据前递)
     wire [4:0] rd_delay_2;  // 延迟2拍(也就是MEM的数据前递),而wb写回可以通过下降沿写回实现前递,所以不需要rd_delay_3
+    wire stall ;            // 流水线暂停标志
     wire load_use_hazard;   // 判断是否产生冲突4:lw与addi相邻冲突
     wire BranchTaken;
 
@@ -84,11 +85,11 @@ module ControlUnit(
         .out(rd_delay_2)
     );
     // 确定在ex_mem或mem_wb阶段是在进行数据写入的指令,并且目的寄存器不是x0,并且目的寄存器和当前指令的rs1相同,则需要前递
-    assign ALUSrcA_ID = (load_use_hazard | BranchTaken) ? 2'b00 :
+    assign ALUSrcA_ID = (stall | BranchTaken) ? 2'b00 :
                         (RFWrite_EX && rd_delay_1 != 0 && rd_delay_1 == rs1) ? 2'b10 : 
                         (RFWrite_MEM  && rd_delay_2 != 0 && rd_delay_2 == rs1) ? 2'b11 : 2'b00 ;
     // 确定在ex_mem或mem_wb阶段是在进行数据写入的指令,并且目的寄存器不是x0,并且目的寄存器和当前指令的rs2相同,则需要前递
-    assign ALUSrcB_ID = (load_use_hazard | BranchTaken) ? 3'b000 :
+    assign ALUSrcB_ID = (stall | BranchTaken) ? 3'b000 :
                         ((R_type| Branch_type) && RFWrite_EX && rd_delay_1 != 0 && rd_delay_1 == rs2) ? 3'b011 : 
                         ((R_type| Branch_type) && RFWrite_MEM  && rd_delay_2 != 0 && rd_delay_2 == rs2) ? 3'b100 : 
                         (R_type) ? 3'b000 :
@@ -111,8 +112,8 @@ module ControlUnit(
     assign load_use_hazard = (hazard_raw === 1'bx) ? 1'b0 : hazard_raw;
 
     // 如果产生lw冲突,则需要暂停流水线,冻结PC和IR,并且在ID阶段(也就是接下来的EX)注入气泡(将控制信号置0)
-    assign PCWrite = rst ? 0 : load_use_hazard ? 0 : 1 ;
-    assign IRWrite = rst ? 0 : load_use_hazard ? 0 : 1 ;
+    assign PCWrite = rst ? 0 : stall ? 0 : 1 ;
+    assign IRWrite = rst ? 0 : stall ? 0 : 1 ;
 
     // ID注入气泡,下放到各个ID阶段的Control
 
@@ -151,26 +152,43 @@ module ControlUnit(
     // ID阶段的ID信号进行flush处理,也就是置0,相当于注入气泡,但是不同于lw对于addi的冲突,这里不需要冻结PCWrite
     // IF阶段的out_ins信号进行Nop改写
 
+    // ======================== 控制冲突与数据冲突处理(lw,sw,jal,jalr,bne,beq在EX阶段的数据还未更新, 统一进行stall处理) ========================
+    wire store_hazard;
+    assign store_hazard =
+    Store_type &&
+    (
+        (RFWrite_EX  && rd_delay_1 != 0 && rd_delay_1 == rs2) ||
+        (RFWrite_MEM && rd_delay_2 != 0 && rd_delay_2 == rs2)
+    );
+    wire jalr_hazard;
+    assign jalr_hazard =
+    JALR_type &&
+    (
+        (RFWrite_EX  && rd_delay_1 != 0 && rd_delay_1 == rs1) ||
+        (RFWrite_MEM && rd_delay_2 != 0 && rd_delay_2 == rs1)
+    );
+    assign stall = (load_use_hazard | store_hazard | jalr_hazard) ? 1'b1 : 1'b0 ;
+
     // ======================== 一般组合逻辑 ========================
     // ID阶段信号的组合逻辑,根据指令类型和功能码生成控制信号
     assign InsMemRW = rst ? 1'b0 : 1'b1 ;    // 每个周期都要读指令
     assign RegSel  = `RegSel_rd ;       // 默认使用rd作为目的寄存器,其他指令也无所谓
 
-    assign RFWrite_ID  = rst ? 1'b0 : (load_use_hazard | BranchTaken) ? 1'b0 : R_type | I_type | Load_type | JAL_type | JALR_type;
-    assign DMCtrl_ID   = (load_use_hazard | BranchTaken) ? 1'b0 : Store_type ;       // Store指令写内存,其他指令不写内存
+    assign RFWrite_ID  = rst ? 1'b0 : (stall | BranchTaken) ? 1'b0 : R_type | I_type | Load_type | JAL_type | JALR_type;
+    assign DMCtrl_ID   = (stall | BranchTaken) ? 1'b0 : Store_type ;       // Store指令写内存,其他指令不写内存
     assign ExtSel =
         (I_type && (
             Funct3 == 3'b110 ||
             Funct3 == 3'b111 ||
             Funct3 == 3'b100 )) ? `ExtSel_ZERO : `ExtSel_SIGNED;
-    
     assign NPCOp_ID   = // 注意: 这里直接忽略了B型指令的跳转情况,因为ID阶段无法知道zero信号,所以只能在EX阶段进行修改
         (load_use_hazard | BranchTaken) ? `NPC_PC :
         (Branch_type) ? `NPC_PC :           // 默认不跳转
         (JAL_type)    ? `NPC_Offset20 : 
         (JALR_type)   ? `NPC_rs : `NPC_PC ;
-    assign WDSel_ID = (load_use_hazard | BranchTaken) ? `WDSel_FromALU : Load_type ? `WDSel_FromMEM : 
+    assign WDSel_ID = (stall | BranchTaken) ? `WDSel_FromALU : Load_type ? `WDSel_FromMEM : 
                    (JAL_type | JALR_type)  ? `WDSel_FromPC : `WDSel_FromALU ;
+    
 
     // ALU控制信号
     always @(*)

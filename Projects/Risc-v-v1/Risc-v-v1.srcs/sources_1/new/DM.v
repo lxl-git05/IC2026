@@ -12,14 +12,14 @@ module DM( Addr, WD, clk, DMCtrl, RD);
     // 新增:初始化:直接进行内存清零，避免仅读取垃圾数据,后续需要删除,因为比赛测试不需要内存初始化
     integer i;
     initial begin
-        for (i = 0; i < 1024; i = i + 1) memory[i] = i * 4; // 直接初始化为地址值,方便调试,后续需要删除
+        for (i = 0; i < 1024; i = i + 1) memory[i] = 0; // 直接初始化为地址值,方便调试,后续需要删除
     end
 
     // 新增:输入地址打1拍
     wire [31:0] WD_delay;
-    Delay #(32) Delay_inst (
+    Delay #(32) Delay_WD_inst (
         .clk(clk),
-        .rst(1'b1),
+        .rst(1'b0),
         .in(WD),
         .delay_num(2'b01),  // 1周期延迟
         .out(WD_delay)

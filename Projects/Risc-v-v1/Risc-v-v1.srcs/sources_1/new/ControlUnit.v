@@ -21,7 +21,8 @@ module ControlUnit(
     output reg [1:0] WDSel,      // WB
     output reg [3:0] ALUOp,      // EX
 
-    input [4:0] rs1 , rs2 , rd               // 新增: rd,用来判断数据是否需要前递
+    input [4:0] rs1 , rs2 , rd,  // 新增: rd,用来判断数据是否需要前递
+    output wire flush            // 新增: 流水线flush信号,冲刷控制冲突下多余的指令
 );
 
     // ======================== 先得到类型,好进行下面的分析 (暂时不支持U型指令) ========================
@@ -34,10 +35,6 @@ module ControlUnit(
     wire JALR_type;         assign JALR_type   = (opcode === 7'b1100111) ? 1'b1 : 1'b0;
     wire BEQ_type;          assign BEQ_type    = (opcode === 7'b1100011 && Funct3 === 3'b000) ? 1'b1 : 1'b0;
     wire BNE_type;          assign BNE_type    = (opcode === 7'b1100011 && Funct3 === 3'b001) ? 1'b1 : 1'b0;
-
-// 如果后续逻辑需要统一处理 B 类型指令（例如提取偏移量），可以保留一个组合信号
-wire B_type;
-assign B_type = BEQ_type | BNE_type;
     
     // ======================== 流水线信号定义 ========================
     // ID阶段
@@ -69,6 +66,7 @@ assign B_type = BEQ_type | BNE_type;
     wire [4:0] rd_delay_1;  // 延迟1拍(也就是EX的数据前递)
     wire [4:0] rd_delay_2;  // 延迟2拍(也就是MEM的数据前递),而wb写回可以通过下降沿写回实现前递,所以不需要rd_delay_3
     wire load_use_hazard;   // 判断是否产生冲突4:lw与addi相邻冲突
+    wire BranchTaken;
 
     // ======================== 数据冲突1,2,3: ALU结果前递到EX阶段 ========================
     Delay #(5) Delay_rd_inst_1 (
@@ -86,13 +84,13 @@ assign B_type = BEQ_type | BNE_type;
         .out(rd_delay_2)
     );
     // 确定在ex_mem或mem_wb阶段是在进行数据写入的指令,并且目的寄存器不是x0,并且目的寄存器和当前指令的rs1相同,则需要前递
-    assign ALUSrcA_ID = load_use_hazard ? 2'b00 :
+    assign ALUSrcA_ID = (load_use_hazard | BranchTaken) ? 2'b00 :
                         (RFWrite_EX && rd_delay_1 != 0 && rd_delay_1 == rs1) ? 2'b10 : 
                         (RFWrite_MEM  && rd_delay_2 != 0 && rd_delay_2 == rs1) ? 2'b11 : 2'b00 ;
     // 确定在ex_mem或mem_wb阶段是在进行数据写入的指令,并且目的寄存器不是x0,并且目的寄存器和当前指令的rs2相同,则需要前递
-    assign ALUSrcB_ID = load_use_hazard ? 3'b000 :
-                        ((R_type) && RFWrite_EX && rd_delay_1 != 0 && rd_delay_1 == rs2) ? 3'b011 : 
-                        ((R_type) && RFWrite_MEM  && rd_delay_2 != 0 && rd_delay_2 == rs2) ? 3'b100 : 
+    assign ALUSrcB_ID = (load_use_hazard | BranchTaken) ? 3'b000 :
+                        ((R_type| Branch_type) && RFWrite_EX && rd_delay_1 != 0 && rd_delay_1 == rs2) ? 3'b011 : 
+                        ((R_type| Branch_type) && RFWrite_MEM  && rd_delay_2 != 0 && rd_delay_2 == rs2) ? 3'b100 : 
                         (R_type) ? 3'b000 :
                         (I_type | Load_type | JALR_type) ? 3'b001 :
                         (Store_type | JAL_type) ? 3'b010 : 3'b000 ;
@@ -142,13 +140,24 @@ assign B_type = BEQ_type | BNE_type;
         NPCOp = (BNE_Type_EX && zero == 1'b0) || (BEQ_Type_EX && zero == 1'b1) ? `NPC_Offset12 : NPCOp_EX ;
     end
 
+    // ======================== 控制冲突处理(jal,jalr,bne,beq都在EX阶段处理) ========================
+    assign BranchTaken =
+    (BNE_Type_EX && !zero) ||           // BNE
+    (BEQ_Type_EX && zero) ||            // BEQ
+    (NPCOp_EX == `NPC_Offset20) ||      // jal
+    (NPCOp_EX == `NPC_rs);              // jalr
+    assign flush = BranchTaken;
+    // 如果冲突,那么就开始进行flush冲刷处理
+    // ID阶段的ID信号进行flush处理,也就是置0,相当于注入气泡,但是不同于lw对于addi的冲突,这里不需要冻结PCWrite
+    // IF阶段的out_ins信号进行Nop改写
+
     // ======================== 一般组合逻辑 ========================
     // ID阶段信号的组合逻辑,根据指令类型和功能码生成控制信号
     assign InsMemRW = rst ? 1'b0 : 1'b1 ;    // 每个周期都要读指令
     assign RegSel  = `RegSel_rd ;       // 默认使用rd作为目的寄存器,其他指令也无所谓
 
-    assign RFWrite_ID  = rst ? 1'b0 : load_use_hazard ? 1'b0 : R_type | I_type | Load_type | JAL_type | JALR_type;
-    assign DMCtrl_ID   = load_use_hazard ? 1'b0 : Store_type ;       // Store指令写内存,其他指令不写内存
+    assign RFWrite_ID  = rst ? 1'b0 : (load_use_hazard | BranchTaken) ? 1'b0 : R_type | I_type | Load_type | JAL_type | JALR_type;
+    assign DMCtrl_ID   = (load_use_hazard | BranchTaken) ? 1'b0 : Store_type ;       // Store指令写内存,其他指令不写内存
     assign ExtSel =
         (I_type && (
             Funct3 == 3'b110 ||
@@ -156,11 +165,11 @@ assign B_type = BEQ_type | BNE_type;
             Funct3 == 3'b100 )) ? `ExtSel_ZERO : `ExtSel_SIGNED;
     
     assign NPCOp_ID   = // 注意: 这里直接忽略了B型指令的跳转情况,因为ID阶段无法知道zero信号,所以只能在EX阶段进行修改
-        load_use_hazard ? `NPC_PC :
+        (load_use_hazard | BranchTaken) ? `NPC_PC :
         (Branch_type) ? `NPC_PC :           // 默认不跳转
         (JAL_type)    ? `NPC_Offset20 : 
         (JALR_type)   ? `NPC_rs : `NPC_PC ;
-    assign WDSel_ID = load_use_hazard ? `WDSel_FromALU : Load_type ? `WDSel_FromMEM : 
+    assign WDSel_ID = (load_use_hazard | BranchTaken) ? `WDSel_FromALU : Load_type ? `WDSel_FromMEM : 
                    (JAL_type | JALR_type)  ? `WDSel_FromPC : `WDSel_FromALU ;
 
     // ALU控制信号

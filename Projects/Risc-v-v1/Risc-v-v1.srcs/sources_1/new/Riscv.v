@@ -37,12 +37,14 @@ module riscv(clk, rst);
     assign Offset   = (opcode == `INSTR_BTYPE_OP) ? {out_ins[31],out_ins[7],out_ins[30:25],out_ins[11:8]} :
                       (opcode == `INSTR_SW_OP)    ? {out_ins[31:25],out_ins[11:7]} : Imm12;
     
+    wire flush ;    // 新增:IR冲刷信号
+    
     // ControlUnit
     ControlUnit U_ControlUnit(
         .clk(clk), .rst(rst), .zero(zero), .opcode(opcode), .Funct7(Funct7), .Funct3(Funct3),
         .RFWrite(RFWrite), .DMCtrl(DMCtrl), .PCWrite(PCWrite), .IRWrite(IRWrite), .InsMemRW(InsMemRW),
         .ExtSel(ExtSel), .ALUOp(ALUOp), .NPCOp(NPCOp), .ALUSrcA(ALUSrcA),
-        .WDSel(WDSel), .ALUSrcB(ALUSrcB), .RegSel(RegSel), .rs1(rs1) , .rs2(rs2) , .rd(rd)
+        .WDSel(WDSel), .ALUSrcB(ALUSrcB), .RegSel(RegSel), .rs1(rs1) , .rs2(rs2) , .rd(rd) , .flush(flush)
     );
 
     // PC
@@ -50,9 +52,9 @@ module riscv(clk, rst);
         .clk(clk), .rst(rst), .PCWrite(PCWrite), .NPC(NPC), .PC(PC)
     );
 
-    // NPC
+    // NPC,必须新增A,因为一旦产生数据冲突,rd1作为旧值会产生错误
     NPC U_NPC (
-        .clk(clk), .rst(rst), .PC(PC), .NPCOp(NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs(RD1), .PCA4(PCA4), .NPC(NPC)
+        .clk(clk), .rst(rst), .PC(PC), .NPCOp(NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs(RD1), .PCA4(PCA4), .NPC(NPC), .rs_A(A)
     );
 
     // IM
@@ -60,10 +62,9 @@ module riscv(clk, rst);
         .addr(PC[11:2]), .Ins(in_ins), .InsMemRW(InsMemRW)
     );
 
-    // assign out_ins = in_ins;
     // IR
     IR U_IR (
-        .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins)
+        .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins) , .flush(flush)
     );
 
     // RF

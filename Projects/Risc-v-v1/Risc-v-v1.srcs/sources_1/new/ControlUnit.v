@@ -21,7 +21,6 @@ module ControlUnit(
     output reg [1:0] WDSel,      // WB
     output reg [3:0] ALUOp,      // EX
 
-    output wire NPC_Enable,      // 新增: 默认流水线中NPC_Enable为0,流水线中NPC_Enable为1时,PC为NPC,为0:PC+4
     input [4:0] rs1 , rs2 , rd               // 新增: rd,用来判断数据是否需要前递
 );
 
@@ -114,7 +113,6 @@ module ControlUnit(
     // ID注入气泡,下放到各个ID阶段的Control
 
     // ======================== 一般组合逻辑 ========================
-    assign NPC_Enable = 0;
     // ID阶段信号的组合逻辑,根据指令类型和功能码生成控制信号
     assign InsMemRW = rst ? 1'b0 : 1'b1 ;    // 每个周期都要读指令
     assign RegSel  = `RegSel_rd ;       // 默认使用rd作为目的寄存器,其他指令也无所谓

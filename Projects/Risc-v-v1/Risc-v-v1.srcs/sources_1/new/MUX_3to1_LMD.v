@@ -17,7 +17,7 @@ module MUX_3to1_LMD(clk,X,Y,Z,control,out);
         case(control)
             `WDSel_FromALU : out = X_delay;
             `WDSel_FromMEM : out = Y;
-            `WDSel_FromPC  : out = Z << 2;  // PCA4存储的是PC+4的值, 需要左移2位才能得到正确的地址
+            `WDSel_FromPC  : out = Z;  // PCA4存储的是PC+4的值
             `WDSel_Else    : out = 0;
         endcase
     end

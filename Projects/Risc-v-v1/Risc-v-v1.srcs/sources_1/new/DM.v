@@ -9,12 +9,6 @@ module DM( Addr, WD, clk, DMCtrl, RD);
 
     reg [31:0] memory[0:1023];
 
-    // // 新增:初始化:直接进行内存清零，避免仅读取垃圾数据,后续需要删除,因为比赛测试不需要内存初始化
-    // integer i;
-    // initial begin
-    //     for (i = 0; i < 1024; i = i + 1) memory[i] = 0 ; // 直接初始化为地址值,方便调试,后续需要删除
-    // end
-
     // 新增:输入地址打1拍
     reg [31:0] WD_delay;
     always @(posedge clk) begin
